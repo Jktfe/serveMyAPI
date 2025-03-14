@@ -2,6 +2,8 @@
 
 A personal MCP (Model Context Protocol) server for securely storing and accessing API keys across projects using the macOS Keychain.
 
+> **IMPORTANT**: ServeMyAPI is a macOS-specific tool that relies on the macOS Keychain for secure storage. It is not compatible with Windows or Linux operating systems. See the security notes section for more details.
+
 ## Overview
 
 ServeMyAPI allows you to store API keys securely in the macOS Keychain and access them through a consistent MCP interface. This makes it easy to:
@@ -10,6 +12,27 @@ ServeMyAPI allows you to store API keys securely in the macOS Keychain and acces
 - Access the same keys across multiple projects
 - Use natural language to store and retrieve keys (when used with LLMs like Claude)
 - Provide keys directly to your AI assistant when it needs to access services
+
+## Why ServeMyAPI over .ENV Files?
+
+Using ServeMyAPI instead of traditional .ENV files solves several common problems:
+
+1. **GitHub Security Conflicts**: 
+   - .ENV files need to be excluded from Git repositories for security (via .gitignore)
+   - This creates a "hidden context" problem where important configuration is invisible to collaborators and LLMs
+   - New developers often struggle with setting up the correct environment variables
+
+2. **LLM Integration Challenges**:
+   - LLMs like Claude can't directly access your .ENV files due to security constraints
+   - When LLMs need API keys to complete tasks, you often need manual workarounds
+   - ServeMyAPI lets your AI assistant request keys through natural language
+
+3. **Cross-Project Consistency**:
+   - With .ENV files, you typically need to duplicate API keys across multiple projects
+   - When keys change, you need to update multiple files
+   - ServeMyAPI provides a central storage location accessible from any project
+
+This approach gives you the best of both worlds: secure storage of sensitive credentials without sacrificing visibility and accessibility for your AI tools.
 
 ## Features
 
@@ -147,6 +170,20 @@ Using serveMyAPI, list all my stored API keys
 - Keys are only accessible to the current user
 - The keychain requires authentication for access
 - No keys are stored in plaintext or logged anywhere
+
+## Roadmap
+
+Future plans for ServeMyAPI include:
+
+- **Code Scanner Tool**: A tool that automatically scans your codebase for API endpoints, sensitive URLs, and environment variables, then suggests names to store them in the Keychain. This would allow developers to continue using .ENV files in their regular workflow while ensuring credentials are also available to LLMs and other tools when needed.
+
+- **Cross-Platform Support**: Investigating secure credential storage options for Windows and Linux to make ServeMyAPI more widely accessible.
+
+- **Integration with Popular Frameworks**: Providing easy integration with frameworks like Next.js, Express, and others.
+
+- **UI for Key Management**: A simple web interface for managing your stored API keys directly.
+
+Feel free to suggest additional features or contribute to the roadmap by opening an issue or pull request.
 
 ## Development
 
