@@ -22,41 +22,56 @@ startCommand:
 
 tools:
   store-api-key:
+    name: "store-api-key"
     description: "Store an API key securely in the keychain"
     parameters:
+      $schema: "http://json-schema.org/draft-07/schema#"
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
+          minLength: 1
           description: "The name/identifier for the API key"
         key:
           type: string
+          minLength: 1
           description: "The API key to store"
       required: ["name", "key"]
   get-api-key:
+    name: "get-api-key"
     description: "Retrieve an API key from the keychain"
     parameters:
+      $schema: "http://json-schema.org/draft-07/schema#"
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
+          minLength: 1
           description: "The name/identifier of the API key to retrieve"
       required: ["name"]
   delete-api-key:
+    name: "delete-api-key"
     description: "Delete an API key from the keychain"
     parameters:
+      $schema: "http://json-schema.org/draft-07/schema#"
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
+          minLength: 1
           description: "The name/identifier of the API key to delete"
       required: ["name"]
   list-api-keys:
+    name: "list-api-keys"
     description: "List all stored API keys"
     parameters:
+      $schema: "http://json-schema.org/draft-07/schema#"
       type: object
-      properties: {}
       additionalProperties: false
+      properties: {}
 
 build:
   dockerfile: Dockerfile
