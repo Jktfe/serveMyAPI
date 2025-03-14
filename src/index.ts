@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import keychainService from "./services/keychain.js";
+import keytar from 'keytar';
 
 // Create an MCP server
 const server = new McpServer({
@@ -119,7 +120,8 @@ server.tool(
   {},
   async () => {
     try {
-      const keys = await keychainService.listKeys();
+      const credentials = await keytar.findCredentials('serveMyAPI');
+      const keys = credentials.map(cred => cred.account);
       
       if (keys.length === 0) {
         return {
