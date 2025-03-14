@@ -1,0 +1,36 @@
+version: '1'
+
+# This is a macOS-only MCP service that depends on Keychain
+# The containerization configuration is provided for Smithery compliance only
+
+# Basic build configuration
+build:
+  docker:
+    file: Dockerfile
+    context: .
+
+# Deployment configuration
+deploy:
+  port: 3000
+  env:
+    - key: NODE_ENV
+      value: production
+
+# MCP tool configuration
+service:
+  name: serveMyAPI
+  description: Personal MCP server for securely storing and accessing API keys using macOS Keychain
+  tools:
+    - name: store-api-key
+      description: Securely store an API key in the macOS Keychain
+    - name: get-api-key
+      description: Retrieve an API key from the macOS Keychain
+    - name: delete-api-key
+      description: Delete an API key from the macOS Keychain
+    - name: list-api-keys
+      description: List all stored API keys in the macOS Keychain
+
+# Platform limitations
+platform:
+  os: macos
+  notes: "This MCP server is macOS-only as it depends on the macOS Keychain API. It will not function on other operating systems."
