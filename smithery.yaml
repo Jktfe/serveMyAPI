@@ -20,6 +20,32 @@ startCommand:
       };
     }
 
+tools:
+  - name: "store-api-key"
+    description: "Store an API key securely in the keychain"
+    parameters:
+      name:
+        type: string
+        description: "The name/identifier for the API key"
+      key:
+        type: string
+        description: "The API key to store"
+  - name: "get-api-key"
+    description: "Retrieve an API key from the keychain"
+    parameters:
+      name:
+        type: string
+        description: "The name/identifier of the API key to retrieve"
+  - name: "delete-api-key"
+    description: "Delete an API key from the keychain"
+    parameters:
+      name:
+        type: string
+        description: "The name/identifier of the API key to delete"
+  - name: "list-api-keys"
+    description: "List all stored API keys"
+    parameters: {}
+
 build:
   dockerfile: Dockerfile
   dockerBuildPath: "."

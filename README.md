@@ -1,5 +1,7 @@
 # ServeMyAPI
 
+[![smithery badge](https://smithery.ai/badge/@Jktfe/servemyapi)](https://smithery.ai/server/@Jktfe/servemyapi)
+
 A personal MCP (Model Context Protocol) server for securely storing and accessing API keys across projects using the macOS Keychain.
 
 > **IMPORTANT**: ServeMyAPI is a macOS-specific tool that relies on the macOS Keychain for secure storage. It is not compatible with Windows or Linux operating systems. See the security notes section for more details.
@@ -74,6 +76,31 @@ node dist/server.js
 ```
 
 This will start the server on port 3000 (or the port specified in the PORT environment variable).
+
+### Using Smithery
+
+ServeMyAPI is available as a hosted service on [Smithery](https://smithery.ai/server/@Jktfe/servemyapi).
+
+```javascript
+import { createTransport } from "@smithery/sdk/transport.js"
+
+const transport = createTransport("https://server.smithery.ai/@Jktfe/servemyapi")
+
+// Create MCP client
+import { Client } from "@modelcontextprotocol/sdk/client/index.js"
+
+const client = new Client({
+	name: "Test client",
+	version: "1.0.0"
+})
+await client.connect(transport)
+
+// Use the server tools with your LLM application
+const tools = await client.listTools()
+console.log(`Available tools: ${tools.map(t => t.name).join(", ")}`)
+```
+
+For more details, see the [Smithery API documentation](https://smithery.ai/server/@Jktfe/servemyapi/api).
 
 ### Configuring MCP Clients
 
