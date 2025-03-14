@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "serveMyAPI": {
+      "command": "node",
+      "args": [
+        "/ABSOLUTE/PATH/TO/servemyapi/dist/index.js"
+      ]
+    }
+  }
+}
