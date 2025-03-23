@@ -120,8 +120,7 @@ server.tool(
   {},
   async () => {
     try {
-      const credentials = await keytar.findCredentials('serveMyAPI');
-      const keys = credentials.map(cred => cred.account);
+      const keys = await keychainService.listKeys();
       
       if (keys.length === 0) {
         return {
