@@ -40,6 +40,7 @@ This approach gives you the best of both worlds: secure storage of sensitive cre
 
 - Secure storage of API keys in the macOS Keychain
 - Simple MCP tools for storing, retrieving, listing, and deleting keys
+- Convenient CLI interface for terminal-based key management
 - Support for both stdio and HTTP/SSE transports
 - Compatible with any MCP client (Claude Desktop, etc.)
 
@@ -59,9 +60,34 @@ npm run build
 
 ## Usage
 
+### CLI Interface
+
+ServeMyAPI comes with a command-line interface for quick key management directly from your terminal:
+
+```bash
+# Install the CLI globally
+npm run build
+npm link
+
+# List all stored API keys
+api-key list
+
+# Get a specific API key
+api-key get github_token
+
+# Store a new API key
+api-key store github_token ghp_123456789abcdefg
+
+# Delete an API key
+api-key delete github_token
+
+# Display help
+api-key help
+```
+
 ### Running as a stdio server
 
-This is the simplest way to use ServeMyAPI, especially when working with Claude Desktop:
+This is the simplest way to use ServeMyAPI as an MCP server, especially when working with Claude Desktop:
 
 ```bash
 npm start
@@ -217,6 +243,9 @@ Feel free to suggest additional features or contribute to the roadmap by opening
 ```bash
 # Run in development mode with hot reload
 npm run dev
+
+# Use the CLI during development
+npm run cli list
 
 # Lint the code
 npm run lint

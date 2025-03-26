@@ -4,12 +4,16 @@
   "description": "Personal MCP server for securely storing and accessing API keys across projects using the macOS Keychain",
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "api-key": "dist/cli.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
     "lint": "eslint 'src/**/*.ts'",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "cli": "node dist/cli.js"
   },
   "keywords": ["mcp", "api", "keychain", "macos"],
   "author": "James King",
