@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/jktfe-servemyapi-badge.png)](https://mseep.ai/app/jktfe-servemyapi)
+
 # ServeMyAPI
 
 [![smithery badge](https://smithery.ai/badge/@Jktfe/servemyapi)](https://smithery.ai/server/@Jktfe/servemyapi)
