@@ -1,7 +1,8 @@
 # ServeMyAPI
 
-[![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/Jktfe/serveMyAPI)](https://archestra.ai/mcp-catalog/jktfe__servemyapi)
 [![smithery badge](https://smithery.ai/badge/@Jktfe/servemyapi)](https://smithery.ai/server/@Jktfe/servemyapi)
+
+[![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/Jktfe/serveMyAPI)](https://archestra.ai/mcp-catalog/jktfe__servemyapi)
 
 A personal MCP (Model Context Protocol) server for securely storing and accessing API keys across projects using the macOS Keychain.
 
