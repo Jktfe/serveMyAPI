@@ -6,6 +6,10 @@ A personal MCP (Model Context Protocol) server for securely storing and accessin
 
 > **IMPORTANT**: ServeMyAPI is a macOS-specific tool that relies on the macOS Keychain for secure storage. It is not compatible with Windows or Linux operating systems. See the security notes section for more details.
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/jktfe-servemyapi).
+
 ## Overview
 
 ServeMyAPI allows you to store API keys securely in the macOS Keychain and access them through a consistent MCP interface. This makes it easy to:
