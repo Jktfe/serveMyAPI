@@ -1,230 +1,353 @@
 import express from 'express';
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import { z } from "zod";
-import keychainService from "./services/keychain.js";
+import { createMcpServer, getServerInfo } from "./mcp/server.js";
+import { corsMiddleware, sseSecurityHeaders } from "./middleware/security.js";
+import { errorHandler, notFoundHandler, requestLogger, setupErrorHandlers } from "./middleware/error-handler.js";
+import { commonSecurityValidation, schemas, validate } from "./middleware/validation.js";
+import { applyCsrfProtection } from "./middleware/csrf.js";
+import { jwtAuth } from "./middleware/jwt-auth.js";
+import { apiKeyAuth } from "./middleware/api-key-auth.js";
+import { apiRateLimiter, authRateLimiter, publicRateLimiter } from "./middleware/rate-limiter.js";
+import { secureSessionManager } from './services/secure-session-manager.js';
+import { config, isProduction, getAllowedOrigins } from './config/index.js';
+import { logger } from './utils/logger.js';
+import { authService } from './services/auth.js';
 
-// Create an MCP server
-const server = new McpServer({
-  name: "ServeMyAPI",
-  version: "1.0.0"
-});
+// Set up error handlers
+setupErrorHandlers();
 
-// Tool to store an API key
-server.tool(
-  "store-api-key",
-  {
-    name: z.string().min(1).describe("The name/identifier for the API key"),
-    key: z.string().min(1).describe("The API key to store"),
-  },
-  async ({ name, key }) => {
-    try {
-      await keychainService.storeKey(name, key);
-      return {
-        content: [{ 
-          type: "text", 
-          text: `Successfully stored API key with name: ${name}` 
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{ 
-          type: "text", 
-          text: `Error storing API key: ${(error as Error).message}` 
-        }],
-        isError: true
-      };
-    }
-  }
-);
-
-// Tool to retrieve an API key
-server.tool(
-  "get-api-key",
-  {
-    name: z.string().min(1).describe("The name/identifier of the API key to retrieve"),
-  },
-  async ({ name }) => {
-    try {
-      const key = await keychainService.getKey(name);
-      
-      if (!key) {
-        return {
-          content: [{ 
-            type: "text", 
-            text: `No API key found with name: ${name}` 
-          }],
-          isError: true
-        };
-      }
-      
-      return {
-        content: [{ 
-          type: "text", 
-          text: key
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{ 
-          type: "text", 
-          text: `Error retrieving API key: ${(error as Error).message}` 
-        }],
-        isError: true
-      };
-    }
-  }
-);
-
-// Tool to delete an API key
-server.tool(
-  "delete-api-key",
-  {
-    name: z.string().min(1).describe("The name/identifier of the API key to delete"),
-  },
-  async ({ name }) => {
-    try {
-      const success = await keychainService.deleteKey(name);
-      
-      if (!success) {
-        return {
-          content: [{ 
-            type: "text", 
-            text: `No API key found with name: ${name}` 
-          }],
-          isError: true
-        };
-      }
-      
-      return {
-        content: [{ 
-          type: "text", 
-          text: `Successfully deleted API key with name: ${name}` 
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{ 
-          type: "text", 
-          text: `Error deleting API key: ${(error as Error).message}` 
-        }],
-        isError: true
-      };
-    }
-  }
-);
-
-// Tool to list all stored API keys
-server.tool(
-  "list-api-keys",
-  {},
-  async () => {
-    try {
-      const keys = await keychainService.listKeys();
-      
-      if (keys.length === 0) {
-        return {
-          content: [{ 
-            type: "text", 
-            text: "No API keys found" 
-          }]
-        };
-      }
-      
-      return {
-        content: [{ 
-          type: "text", 
-          text: `Available API keys:\n${keys.join("\n")}` 
-        }]
-      };
-    } catch (error) {
-      return {
-        content: [{ 
-          type: "text", 
-          text: `Error listing API keys: ${(error as Error).message}` 
-        }],
-        isError: true
-      };
-    }
-  }
-);
+// Create MCP server with all tools
+const server = createMcpServer();
 
 // Set up Express app for HTTP transport
 const app = express();
-const port = process.env.PORT || 3000;
 
-// Store active transports
-const activeTransports = new Map<string, any>();
+// Trust proxy for accurate IP addresses
+app.set('trust proxy', true);
 
-app.get("/sse", async (req, res) => {
-  const id = Date.now().toString();
-  const transport = new SSEServerTransport("/messages", res);
-  
-  activeTransports.set(id, transport);
-  
-  // Set headers for SSE
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  
-  // Handle client disconnect
-  req.on('close', () => {
-    activeTransports.delete(id);
+// Apply global security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+}));
+
+// Parse cookies for CSRF protection
+app.use(cookieParser());
+
+// Apply request logging
+app.use(requestLogger);
+
+// Apply common security validation
+app.use(commonSecurityValidation());
+
+// Parse JSON with strict limits
+app.use(express.json({ 
+  limit: '1mb',
+  strict: true,
+  type: ['application/json', 'application/csp-report']
+}));
+
+// Apply CORS
+app.use(corsMiddleware);
+
+// Apply CSRF protection for non-API routes
+app.use(applyCsrfProtection(getAllowedOrigins()));
+
+// API Routes with JWT authentication
+app.post("/api/auth/refresh", 
+  authRateLimiter(),
+  validate(schemas.refreshToken), 
+  async (req, res, next) => {
+    try {
+      const { refreshToken } = req.body;
+      const result = await authService.refreshAccessToken(refreshToken);
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// SSE endpoint with API key authentication
+app.get("/sse", 
+  apiKeyAuth({ permissions: ['read'] }),
+  apiRateLimiter(),
+  validate(schemas.sseConnect),
+  sseSecurityHeaders, 
+  async (req, res, next) => {
+    try {
+      const transport = new SSEServerTransport("/messages", res);
+      const session = secureSessionManager.createSession(req, transport);
+      
+      // Update session with auth info
+      if (req.auth) {
+        secureSessionManager.updateSessionAuth(
+          session.id,
+          req.auth.apiKeyId,
+          req.auth.permissions
+        );
+      }
+      
+      // Set headers for SSE
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Session-ID', session.id);
+      res.setHeader('X-CSRF-Token', session.csrfToken);
+      
+      // Handle client disconnect
+      req.on('close', () => {
+        secureSessionManager.removeSession(session.id);
+        logger.info('SSE client disconnected', { sessionId: session.id });
+      });
+      
+      await server.connect(transport);
+      
+      logger.info('SSE client connected', { 
+        sessionId: session.id,
+        apiKeyId: req.auth?.apiKeyId 
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Messages endpoint with API key authentication
+app.post("/messages", 
+  apiKeyAuth({ permissions: ['write'] }),
+  apiRateLimiter(),
+  validate(schemas.postMessage),
+  async (req, res, next) => {
+    try {
+      const sessionId = req.headers['x-session-id'] as string;
+      
+      if (!sessionId) {
+        res.status(400).json({ error: "Missing session ID" });
+        return;
+      }
+      
+      // Validate session with fingerprint
+      const session = secureSessionManager.validateSession(sessionId, req);
+      
+      // Verify auth matches session
+      if (req.auth && session.apiKeyId !== req.auth.apiKeyId) {
+        logger.warn('Session API key mismatch', {
+          sessionId,
+          sessionApiKeyId: session.apiKeyId,
+          requestApiKeyId: req.auth.apiKeyId
+        });
+        res.status(403).json({ error: "Session authentication mismatch" });
+        return;
+      }
+      
+      // Handle the message
+      await session.transport.handlePostMessage(req, res);
+      
+      logger.debug('Message processed', { 
+        sessionId,
+        method: req.body.method 
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Health check endpoint (public)
+app.get("/health", publicRateLimiter(), (req, res) => {
+  const serverInfo = getServerInfo();
+  const stats = secureSessionManager.getStats();
+  res.json({ 
+    status: "healthy",
+    version: serverInfo.version,
+    uptime: process.uptime(),
+    sessions: stats.totalSessions,
+    timestamp: new Date().toISOString()
   });
-  
-  await server.connect(transport);
 });
 
-app.post("/messages", express.json(), (req, res) => {
-  // Get the last transport - in a production app, you'd want to maintain sessions
-  const lastTransportId = Array.from(activeTransports.keys()).pop();
-  
-  if (!lastTransportId) {
-    res.status(400).json({ error: "No active connections" });
-    return;
-  }
-  
-  const transport = activeTransports.get(lastTransportId);
-  transport.handlePostMessage(req, res).catch((error: Error) => {
-    console.error("Error handling message:", error);
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Internal server error" });
+// API info endpoint (public)
+app.get("/api/info", publicRateLimiter(), (req, res) => {
+  const serverInfo = getServerInfo();
+  res.json({
+    ...serverInfo,
+    security: {
+      authRequired: true,
+      authMethods: ['apiKey', 'jwt'],
+      csrfProtection: true,
+      rateLimiting: true
     }
   });
 });
 
+// API Key Management endpoints (requires JWT auth)
+app.post("/api/keys", 
+  jwtAuth({ permissions: ['admin'] }),
+  apiRateLimiter(),
+  validate(schemas.createApiKey),
+  async (req, res, next) => {
+    try {
+      const result = await authService.createApiKey(req.body);
+      res.status(201).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.delete("/api/keys/:id", 
+  jwtAuth({ permissions: ['admin'] }),
+  apiRateLimiter(),
+  validate(schemas.idParam),
+  async (req, res, next) => {
+    try {
+      await authService.revokeApiKey(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.get("/api/keys", 
+  jwtAuth({ permissions: ['admin'] }),
+  apiRateLimiter(),
+  async (req, res, next) => {
+    try {
+      const keys = await authService.listApiKeys();
+      res.json(keys);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // Simple home page
-app.get("/", (req, res) => {
+app.get("/", publicRateLimiter(), (req, res) => {
+  const serverInfo = getServerInfo();
+  const csrfToken = req.headers['x-csrf-token'] || 'Not available - use /sse endpoint first';
   res.send(`
     <html>
       <head>
-        <title>ServeMyAPI</title>
+        <title>${serverInfo.name}</title>
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
           h1 { color: #333; }
           p { line-height: 1.6; }
-          pre { background: #f5f5f5; padding: 10px; border-radius: 5px; }
+          pre { background: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }
+          .tool { margin: 10px 0; padding: 10px; background: #f9f9f9; border-radius: 5px; }
+          .tool-name { font-weight: bold; color: #0066cc; }
+          .security-note { background: #fff3cd; border: 1px solid #ffeeba; padding: 10px; border-radius: 5px; margin: 10px 0; }
         </style>
       </head>
       <body>
-        <h1>ServeMyAPI</h1>
-        <p>This is a personal MCP server for securely storing and accessing API keys across projects using the macOS Keychain.</p>
-        <p>The server exposes the following tools:</p>
+        <h1>${serverInfo.name}</h1>
+        <p>${serverInfo.description}</p>
+        
+        <div class="security-note">
+          <strong>Security Features:</strong> This server implements JWT authentication, API key scoping, 
+          CSRF protection, session fingerprinting, rate limiting, and comprehensive input validation.
+        </div>
+        
+        <h2>Available Tools</h2>
+        ${serverInfo.tools.map(tool => `
+          <div class="tool">
+            <span class="tool-name">${tool.name}</span>
+            ${tool.description ? `- ${tool.description}` : ''}
+          </div>
+        `).join('')}
+        
+        <h2>Authentication</h2>
+        <p>All API endpoints require authentication:</p>
+        <pre>Authorization: Bearer &lt;your-api-key&gt;</pre>
+        
+        <h2>API Endpoints</h2>
+        <h3>MCP Endpoints</h3>
         <ul>
-          <li><strong>store-api-key</strong> - Store an API key in the keychain</li>
-          <li><strong>get-api-key</strong> - Retrieve an API key from the keychain</li>
-          <li><strong>delete-api-key</strong> - Delete an API key from the keychain</li>
-          <li><strong>list-api-keys</strong> - List all stored API keys</li>
+          <li><code>GET /sse</code> - SSE connection endpoint (requires 'read' permission)</li>
+          <li><code>POST /messages</code> - Send messages to MCP server (requires 'write' permission)</li>
         </ul>
-        <p>This server is running with HTTP SSE transport. Connect to /sse for the SSE endpoint and post messages to /messages.</p>
+        
+        <h3>Authentication Endpoints</h3>
+        <ul>
+          <li><code>POST /api/auth/refresh</code> - Refresh JWT access token</li>
+        </ul>
+        
+        <h3>API Key Management (Admin only)</h3>
+        <ul>
+          <li><code>POST /api/keys</code> - Create new API key</li>
+          <li><code>GET /api/keys</code> - List all API keys</li>
+          <li><code>DELETE /api/keys/:id</code> - Revoke API key</li>
+        </ul>
+        
+        <h3>Public Endpoints</h3>
+        <ul>
+          <li><code>GET /health</code> - Health check endpoint</li>
+          <li><code>GET /api/info</code> - Server information (JSON)</li>
+        </ul>
+        
+        <h2>CSRF Protection</h2>
+        <p>For state-changing operations, include the CSRF token:</p>
+        <pre>X-CSRF-Token: ${csrfToken}</pre>
       </body>
     </html>
   `);
 });
 
-// Start the server
-app.listen(port, () => {
-  console.log(`ServeMyAPI HTTP server is running on port ${port}`);
+// 404 handler (must be before error handler)
+app.use(notFoundHandler);
+
+// Error handling middleware (must be last)
+app.use(errorHandler);
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down gracefully');
+  secureSessionManager.stop();
+  process.exit(0);
 });
 
-export { server };
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, shutting down gracefully');
+  secureSessionManager.stop();
+  process.exit(0);
+});
+
+// Start the server
+const serverInstance = app.listen(config.port, () => {
+  logger.info(`ServeMyAPI HTTP server started`, {
+    port: config.port,
+    environment: config.nodeEnv,
+    authEnabled: !!config.authKey || !!config.jwtSecret,
+    csrfProtection: true,
+    rateLimiting: true
+  });
+  
+  if (isProduction()) {
+    if (!config.jwtSecret) {
+      logger.error('CRITICAL: No JWT_SECRET set in production!');
+      process.exit(1);
+    }
+    if (!config.encryptionKey) {
+      logger.error('CRITICAL: No ENCRYPTION_KEY set in production!');
+      process.exit(1);
+    }
+  }
+});
+
+// Handle server errors
+serverInstance.on('error', (error) => {
+  logger.error('Server error', error);
+  process.exit(1);
+});
+
+export { server, app };

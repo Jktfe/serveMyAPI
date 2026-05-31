@@ -4,7 +4,13 @@
 
 A personal MCP (Model Context Protocol) server for securely storing and accessing API keys across projects using the macOS Keychain.
 
-> **IMPORTANT**: ServeMyAPI is a macOS-specific tool that relies on the macOS Keychain for secure storage. It is not compatible with Windows or Linux operating systems. See the security notes section for more details.
+> **🔒 SECURITY FIRST**: ServeMyAPI is designed to run LOCALLY on your machine. API keys are NEVER transmitted over the internet and should NEVER be deployed to cloud services. **[Read the critical security guidelines](docs/LOCAL-ONLY-SECURITY.md)** before using.
+
+> **Cross-Platform Support**: ServeMyAPI now includes a storage abstraction layer that enables support for multiple platforms:
+> - **macOS**: Uses the native Keychain (default)
+> - **Windows/Linux**: Uses encrypted file storage
+> - **Docker**: Automatically uses encrypted file storage
+> - **Memory**: Available for testing and temporary storage
 
 ## Overview
 
@@ -41,8 +47,15 @@ This approach gives you the best of both worlds: secure storage of sensitive cre
 - Secure storage of API keys in the macOS Keychain
 - Simple MCP tools for storing, retrieving, listing, and deleting keys
 - Convenient CLI interface for terminal-based key management
-- Support for both stdio and HTTP/SSE transports
+- Support for both stdio and HTTP/SSE transports (with authentication)
 - Compatible with any MCP client (Claude Desktop, etc.)
+- **Enhanced Security Features:**
+  - Input validation to prevent path traversal attacks
+  - Encrypted file storage for Docker deployments
+  - Bearer token authentication for HTTP endpoints
+  - Rate limiting and session management
+  - Security headers and CORS protection
+  - Secure logging with automatic redaction of sensitive data
 
 ## Installation
 
@@ -103,30 +116,15 @@ node dist/server.js
 
 This will start the server on port 3000 (or the port specified in the PORT environment variable).
 
-### Using Smithery
+### ⚠️ IMPORTANT SECURITY WARNING
 
-ServeMyAPI is available as a hosted service on [Smithery](https://smithery.ai/server/@Jktfe/servemyapi).
+**DO NOT USE THE SMITHERY HOSTED VERSION** for storing real API keys. The Smithery deployment exists for demonstration purposes only. Using it would:
 
-```javascript
-import { createTransport } from "@smithery/sdk/transport.js"
+1. **Transmit your API keys over the internet** (even with HTTPS, this violates the principle of keeping keys local)
+2. **Store your keys on someone else's server** (the Smithery infrastructure)
+3. **Potentially expose your keys** to the service operator or in case of a breach
 
-const transport = createTransport("https://server.smithery.ai/@Jktfe/servemyapi")
-
-// Create MCP client
-import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-
-const client = new Client({
-	name: "Test client",
-	version: "1.0.0"
-})
-await client.connect(transport)
-
-// Use the server tools with your LLM application
-const tools = await client.listTools()
-console.log(`Available tools: ${tools.map(t => t.name).join(", ")}`)
-```
-
-For more details, see the [Smithery API documentation](https://smithery.ai/server/@Jktfe/servemyapi/api).
+**ServeMyAPI is designed to run LOCALLY on your machine only.** The entire security model depends on keys never leaving your local environment.
 
 ### Configuring MCP Clients
 
@@ -217,12 +215,87 @@ Example (from Claude):
 Using serveMyAPI, list all my stored API keys
 ```
 
-## Security Notes
+## Storage Options
 
-- All API keys are stored securely in the macOS Keychain
-- Keys are only accessible to the current user
-- The keychain requires authentication for access
-- No keys are stored in plaintext or logged anywhere
+ServeMyAPI automatically selects the best storage provider for your platform:
+
+### Platform Detection
+- **macOS**: Keychain (default)
+- **Windows**: Encrypted file storage
+- **Linux**: Encrypted file storage  
+- **Docker**: Encrypted file storage
+
+### Manual Configuration
+You can override the automatic detection:
+
+```bash
+# Force a specific storage type
+export SERVEMYAPI_STORAGE_TYPE=file  # or 'keychain', 'memory'
+
+# Configure file storage location
+export STORAGE_DIR=/path/to/secure/directory
+```
+
+### Storage Types
+
+1. **Keychain Storage** (macOS only)
+   - Native OS-level security
+   - No encryption needed
+   - Requires user permission on first use
+
+2. **File Storage** (Cross-platform)
+   - AES-256-GCM encryption
+   - PBKDF2 key derivation
+   - Stores in `~/.servemyapi/keys.json.enc` by default
+   - Requires `ENCRYPTION_KEY` environment variable
+
+3. **Memory Storage** (Testing)
+   - In-memory only
+   - Data lost on restart
+   - Useful for testing and development
+
+## Security
+
+### Core Security Features
+
+- **Platform-Aware Storage**: Automatically selects secure storage for each platform
+- **macOS Keychain Storage**: API keys are stored in the macOS Keychain with native OS-level security
+- **Encrypted File Storage**: Cross-platform support with AES-256-GCM encryption
+- **Docker Encryption**: When running in Docker, keys are encrypted using AES-256-GCM with PBKDF2 key derivation
+- **Authentication**: HTTP/SSE endpoints require Bearer token authentication
+- **Input Validation**: Strict validation prevents path traversal and injection attacks
+- **Rate Limiting**: Protects against abuse with configurable request limits
+- **Secure Logging**: Automatic redaction of sensitive data in all log outputs
+
+### HTTP Server Security
+
+When using the HTTP/SSE transport:
+
+```bash
+# Set authentication key
+export SERVEAPI_AUTH_KEY="your-secure-api-key"
+
+# Set encryption key for Docker
+export ENCRYPTION_KEY="your-encryption-key"
+
+# Configure CORS origins
+export ALLOWED_ORIGINS="https://app1.com,https://app2.com"
+```
+
+Include the Bearer token in requests:
+```
+Authorization: Bearer your-secure-api-key
+```
+
+### Best Practices
+
+1. **Always use HTTPS in production** - Deploy behind a reverse proxy with TLS
+2. **Set strong authentication keys** - Use `openssl rand -base64 32` to generate
+3. **Run as non-root** - The Docker image automatically uses a restricted user
+4. **Regular key rotation** - Periodically update your authentication and encryption keys
+5. **Monitor access logs** - Watch for suspicious patterns or unauthorized attempts
+
+For detailed security configuration, see [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Roadmap
 

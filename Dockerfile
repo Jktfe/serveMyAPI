@@ -1,14 +1,9 @@
-FROM node:20-slim
+FROM node:20-slim AS builder
 
-# Set environment variable to indicate Docker environment
-ENV DOCKER_ENV=true
-ENV STORAGE_DIR=/app/data
-
+# Install dependencies for building
 WORKDIR /app
-
-# Copy package files and install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci --only=production
 
 # Copy source code
 COPY . .
@@ -16,15 +11,44 @@ COPY . .
 # Build the TypeScript code
 RUN npm run build
 
-# Create data directory for file-based storage
-RUN mkdir -p /app/data && chmod 777 /app/data
+# Runtime stage
+FROM node:20-slim
+
+# Create non-root user
+RUN groupadd -r apiuser && useradd -r -g apiuser apiuser
+
+# Set environment variables
+ENV DOCKER_ENV=true
+ENV STORAGE_DIR=/app/data
+ENV NODE_ENV=production
+
+WORKDIR /app
+
+# Copy built application and dependencies
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+
+# Create data directory with secure permissions
+RUN mkdir -p /app/data && \
+    chown -R apiuser:apiuser /app && \
+    chmod 700 /app/data
+
+# Install curl for health checks as root
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Switch to non-root user
+USER apiuser
 
 # Expose port (if using HTTP server version)
 EXPOSE 3000
 
-# Health check
+# Health check with auth header
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/ || exit 1
+  CMD curl -f http://localhost:3000/health || exit 1
 
 # Set the entry command
 CMD ["node", "dist/index.js"]

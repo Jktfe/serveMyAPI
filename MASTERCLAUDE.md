@@ -8,12 +8,11 @@ serveMyAPI is a Model Context Protocol (MCP) server that securely stores and man
 ## Key Architecture
 - **Transport Layers**: Supports both stdio (for Claude Desktop) and HTTP/SSE (for web clients)
 - **Storage Backend**: macOS Keychain via `keytar` library, with file-based fallback for Docker
-- **Single-blob vault**: On macOS, *all* keys are stored in ONE keychain item under the account `__vault__` (a JSON map of name→value), not one item per key. Because macOS Keychain ACLs are per-item, this collapses N access prompts into a single one for the whole vault. The vault format (account name + codec) lives in `src/utils/vault.ts` so the legacy service and the storage backend can't drift.
 - **Entry Points**: 
   - `src/index.ts` - stdio MCP server
   - `src/server.ts` - HTTP/SSE server
   - `src/cli.ts` - CLI interface
-- **Core Service**: `src/services/keychain.ts` handles all storage operations against the single-blob vault, with an in-process cache (writes are write-through). `src/storage/keychain-storage.ts` is the equivalent provider inside the pluggable storage abstraction (`storageManager`), using the same vault format.
+- **Core Service**: `src/services/keychain.ts` handles all storage operations with permission optimization
 
 ## Development Commands
 ```bash
@@ -35,9 +34,6 @@ npm run cli -- get <name>
 npm run cli -- store <name> <key>
 npm run cli -- delete <name>
 
-# Consolidate legacy per-key items into the single vault (one-time, idempotent)
-npm run cli -- migrate
-
 # Lint code
 npm run lint
 ```
@@ -54,8 +50,7 @@ Currently no automated tests are implemented. The test script exits with error c
 ## Security Considerations
 - Never log or expose API key values in code
 - All keys are stored in macOS Keychain (or encrypted file in Docker)
-- Single-blob vault minimizes keychain access prompts (one item → one ACL → one prompt)
-- Pin the MCP launch command to a stable, signed node path (e.g. `/opt/homebrew/bin/node`) so the Keychain ACL identity doesn't churn across node versions and "Always Allow" sticks
+- Permission markers minimize keychain access prompts
 - Always validate input parameters before storage operations
 
 ## Deployment Notes

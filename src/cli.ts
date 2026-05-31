@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import keychain from './services/keychain.js';
+import { isServeMyAPIError } from './errors/index.js';
 
 // Get the command line arguments
 const args = process.argv.slice(2);
@@ -13,9 +14,12 @@ async function main() {
         // List all API keys
         const keys = await keychain.listKeys();
         if (keys.length === 0) {
+          // eslint-disable-next-line no-console
           console.log('No API keys found.');
         } else {
+          // eslint-disable-next-line no-console
           console.log('Stored API keys:');
+          // eslint-disable-next-line no-console
           keys.forEach(key => console.log(` - ${key}`));
         }
         break;
@@ -31,7 +35,11 @@ async function main() {
         
         const value = await keychain.getKey(keyName);
         if (value) {
-          console.log(`${keyName}: ${value}`);
+          // NEVER print the actual key value for security
+          // eslint-disable-next-line no-console
+          console.log(`Key '${keyName}' exists in keychain.`);
+          // eslint-disable-next-line no-console
+          console.log(`[Key value hidden for security - access it through the MCP server]`);
         } else {
           console.error(`Error: Key '${keyName}' not found.`);
           process.exit(1);
@@ -51,6 +59,7 @@ async function main() {
         }
         
         await keychain.storeKey(storeName, storeValue);
+        // eslint-disable-next-line no-console
         console.log(`Key '${storeName}' stored successfully.`);
         break;
         
@@ -67,6 +76,7 @@ async function main() {
         
         const deleted = await keychain.deleteKey(deleteName);
         if (deleted) {
+          // eslint-disable-next-line no-console
           console.log(`Key '${deleteName}' deleted successfully.`);
         } else {
           console.error(`Error: Failed to delete key '${deleteName}'. Key may not exist.`);
@@ -74,6 +84,24 @@ async function main() {
         }
         break;
         
+      case 'migrate':
+        // One-shot migration of legacy per-key items into the single vault.
+        // eslint-disable-next-line no-console
+        console.log('Migrating legacy keychain items into the single vault...');
+        // eslint-disable-next-line no-console
+        console.log('(macOS may prompt once per legacy key — click "Always Allow" to breeze through.)');
+        const report = await keychain.migrateToVault();
+        // eslint-disable-next-line no-console
+        console.log(`\nMigrated: ${report.migrated.length} key(s)`);
+        // eslint-disable-next-line no-console
+        console.log(`Deleted legacy items: ${report.deleted.length}`);
+        if (report.skipped.length > 0) {
+          console.error(`Skipped (left in place, verification failed): ${report.skipped.join(', ')}`);
+        }
+        // eslint-disable-next-line no-console
+        console.log('\nDone. All keys now live in one keychain item — expect a single prompt from now on.');
+        break;
+
       case '--help':
       case '-h':
       case 'help':
@@ -86,12 +114,17 @@ async function main() {
         process.exit(1);
     }
   } catch (error) {
+    if (isServeMyAPIError(error)) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
     console.error('Error:', error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }
 
 function printUsage() {
+  // eslint-disable-next-line no-console
   console.log(`
 Usage: api-key <command> [options]
 
@@ -102,6 +135,7 @@ Commands:
   add <key-name> <key-value>    Alias for 'store'
   delete <key-name>             Delete an API key
   remove <key-name>             Alias for 'delete'
+  migrate                       Consolidate legacy per-key items into one vault
   help                          Show this help message
 
 Examples:
@@ -113,6 +147,10 @@ Examples:
 }
 
 main().catch(err => {
+  if (isServeMyAPIError(err)) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
   console.error('Error:', err instanceof Error ? err.message : String(err));
   process.exit(1);
 });
