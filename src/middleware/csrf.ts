@@ -155,10 +155,17 @@ export class CsrfProtection {
       }
 
       const origin = req.headers.origin || req.headers.referer;
-      
+
       if (!origin) {
-        // No origin header might be legitimate for same-origin requests
-        return next();
+        // Fail closed: an unsafe (state-changing) method with no Origin/Referer
+        // cannot be origin-validated, so reject rather than wave it through.
+        // Same-origin clients that omit Origin must use the double-submit
+        // cookie/header check (doubleSubmitValidation) instead.
+        logger.warn('Origin validation failed: missing Origin/Referer', {
+          method: req.method,
+          path: req.path,
+        });
+        return res.status(403).json({ error: 'Missing origin' });
       }
 
       // Parse origin URL

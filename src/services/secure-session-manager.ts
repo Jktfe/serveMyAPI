@@ -87,15 +87,15 @@ export class SecureSessionManager {
   }
 
   /**
-   * Get client IP considering proxies
+   * Get client IP.
+   *
+   * Deliberately does NOT read `X-Forwarded-For` directly — that header is
+   * client-settable and trusting it lets an attacker spoof the IP that feeds
+   * the session fingerprint. `req.ip` already resolves XFF correctly *only*
+   * for hops Express is told to trust via `app.set('trust proxy', ...)`, so
+   * the proxy configuration (not this code) decides what is trustworthy.
    */
   private getClientIp(req: Request): string {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (forwarded) {
-      // Handle string or array of IPs
-      const forwardedStr = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-      return forwardedStr.split(',')[0].trim();
-    }
     return req.ip || 'unknown';
   }
 

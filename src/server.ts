@@ -232,9 +232,8 @@ app.get("/api/keys",
 );
 
 // Simple home page
-app.get("/", publicRateLimiter(), (req, res) => {
+app.get("/", publicRateLimiter(), (_req, res) => {
   const serverInfo = getServerInfo();
-  const csrfToken = req.headers['x-csrf-token'] || 'Not available - use /sse endpoint first';
   res.send(`
     <html>
       <head>
@@ -296,8 +295,8 @@ app.get("/", publicRateLimiter(), (req, res) => {
         </ul>
         
         <h2>CSRF Protection</h2>
-        <p>For state-changing operations, include the CSRF token:</p>
-        <pre>X-CSRF-Token: ${csrfToken}</pre>
+        <p>For state-changing operations, include the CSRF token returned by the <code>/sse</code> endpoint:</p>
+        <pre>X-CSRF-Token: &lt;token from /sse response header&gt;</pre>
       </body>
     </html>
   `);

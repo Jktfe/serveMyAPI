@@ -29,43 +29,55 @@ export class FileStorage implements StorageProvider {
   }
   
   /**
-   * Encrypt data
+   * Encrypt data.
+   *
+   * A fresh random salt is generated per write and stored alongside the
+   * ciphertext, so the scrypt-derived key differs every time even for the
+   * same passphrase — a static salt would make the KDF output predictable
+   * across all files and installs.
    */
   private encrypt(data: string): string {
+    const salt = crypto.randomBytes(16);
     const iv = crypto.randomBytes(16);
-    const key = crypto.scryptSync(this.encryptionKey, 'salt', 32);
+    const key = crypto.scryptSync(this.encryptionKey, salt, 32);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-    
+
     let encrypted = cipher.update(data, 'utf8', 'hex');
     encrypted += cipher.final('hex');
-    
+
     const authTag = cipher.getAuthTag();
-    
+
     return JSON.stringify({
+      salt: salt.toString('hex'),
       iv: iv.toString('hex'),
       authTag: authTag.toString('hex'),
       data: encrypted
     });
   }
-  
+
   /**
-   * Decrypt data
+   * Decrypt data.
+   *
+   * Reads the per-file salt from the blob. Files written before per-file
+   * salting (no `salt` field) fall back to the original literal 'salt' so
+   * existing data stays readable.
    */
   private decrypt(encryptedData: string): string {
-    const { iv, authTag, data } = JSON.parse(encryptedData);
-    const key = crypto.scryptSync(this.encryptionKey, 'salt', 32);
-    
+    const { salt, iv, authTag, data } = JSON.parse(encryptedData);
+    const keySalt: crypto.BinaryLike = salt ? Buffer.from(salt, 'hex') : 'salt';
+    const key = crypto.scryptSync(this.encryptionKey, keySalt, 32);
+
     const decipher = crypto.createDecipheriv(
       'aes-256-gcm',
       key,
       Buffer.from(iv, 'hex')
     );
-    
+
     decipher.setAuthTag(Buffer.from(authTag, 'hex'));
-    
+
     let decrypted = decipher.update(data, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
-    
+
     return decrypted;
   }
   

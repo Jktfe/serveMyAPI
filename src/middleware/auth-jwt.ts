@@ -62,45 +62,12 @@ export function jwtAuthMiddleware(
   };
 }
 
-/**
- * API key authentication middleware (for backward compatibility)
- */
-export function apiKeyAuthMiddleware(req: Request, res: Response, next: NextFunction): void {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      throw new AuthenticationError('Missing authorization header');
-    }
-
-    const [type, key] = authHeader.split(' ');
-    if (type !== 'ApiKey' || !key) {
-      // Try JWT auth as fallback
-      return jwtAuthMiddleware('read')(req, res, next);
-    }
-
-    // Validate API key format
-    if (!authService.isValidApiKeyFormat(key)) {
-      throw new AuthenticationError('Invalid API key format');
-    }
-
-    // In a real implementation, look up the API key in the database
-    // For now, we'll create a temporary auth context
-    req.auth = {
-      apiKeyId: 'legacy_api_key',
-      permissions: ['read', 'write', 'delete'],
-      jti: 'legacy',
-    };
-
-    next();
-  } catch (error) {
-    if (error instanceof AuthenticationError) {
-      res.status(401).json({ error: error.message });
-    } else {
-      logger.error('API key authentication error', error);
-      res.status(500).json({ error: 'Authentication failed' });
-    }
-  }
-}
+// NOTE: A former `apiKeyAuthMiddleware` lived here. It was removed because it
+// granted full ['read','write','delete'] permissions to ANY correctly-formatted
+// key without verifying it (an authentication bypass), and silently fell back to
+// read-only JWT auth on a non-ApiKey scheme (fail-open). Use the properly
+// implemented `apiKeyAuth({ permissions: [...] })` from `./api-key-auth.ts`,
+// which validates the key against the keychain-stored hashed entry.
 
 /**
  * Token refresh endpoint middleware
