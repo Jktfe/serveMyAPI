@@ -97,11 +97,15 @@ export function isTest(): boolean {
  */
 export function getEncryptionKey(): string {
   if (!config.encryptionKey) {
-    if (isProduction()) {
-      throw new Error('ENCRYPTION_KEY environment variable must be set in production');
-    }
-    console.warn('WARNING: No ENCRYPTION_KEY environment variable set. Using default key - NOT SECURE FOR PRODUCTION!');
-    return 'INSECURE_DEFAULT_KEY_CHANGE_THIS_IN_PRODUCTION';
+    // No hardcoded fallback. This passphrase encrypts the file/Docker key
+    // store; shipping a default in (now public) source would let anyone who
+    // obtains an encrypted store decrypt every key with code from the repo.
+    // It is read lazily and only by the file-encryption path, so the macOS
+    // Keychain flow never reaches here and is unaffected.
+    throw new Error(
+      'ENCRYPTION_KEY (or SERVEAPI_ENCRYPTION_KEY) must be set to use file-based encrypted storage. ' +
+      'No insecure default key is provided.'
+    );
   }
   return config.encryptionKey;
 }

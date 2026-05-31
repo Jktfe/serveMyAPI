@@ -127,11 +127,11 @@ export class CsrfProtection {
         return res.status(403).json({ error: 'Missing CSRF token' });
       }
 
-      // Constant-time comparison
-      if (!crypto.timingSafeEqual(
-        Buffer.from(headerToken),
-        Buffer.from(cookieToken)
-      )) {
+      // Constant-time comparison, length-guarded (timingSafeEqual throws on
+      // unequal-length buffers, and the header token length is attacker-controlled).
+      const headerBuf = Buffer.from(headerToken);
+      const cookieBuf = Buffer.from(cookieToken);
+      if (headerBuf.length !== cookieBuf.length || !crypto.timingSafeEqual(headerBuf, cookieBuf)) {
         logger.warn('CSRF double submit validation failed', {
           method: req.method,
           path: req.path,

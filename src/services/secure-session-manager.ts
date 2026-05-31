@@ -202,10 +202,12 @@ export class SecureSessionManager {
       throw new AuthenticationError('Invalid session');
     }
     
-    if (!csrfToken || !crypto.timingSafeEqual(
-      Buffer.from(session.csrfToken),
-      Buffer.from(csrfToken)
-    )) {
+    // Length-guard before timingSafeEqual: it throws RangeError on unequal
+    // lengths (attacker controls csrfToken length), which would surface as a
+    // 500 instead of a clean rejection. Mismatched length is simply invalid.
+    const expected = Buffer.from(session.csrfToken);
+    const provided = Buffer.from(csrfToken || '');
+    if (provided.length !== expected.length || !crypto.timingSafeEqual(expected, provided)) {
       throw new AuthenticationError('Invalid CSRF token');
     }
   }

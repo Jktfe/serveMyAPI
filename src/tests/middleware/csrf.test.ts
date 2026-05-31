@@ -116,6 +116,23 @@ describe('CsrfProtection.doubleSubmitValidation', () => {
     expect(res.body).toEqual({ error: 'CSRF validation failed' });
   });
 
+  it('rejects tokens of differing lengths without throwing (fails closed)', () => {
+    const req = createMockRequest({
+      method: 'POST',
+      headers: { 'x-csrf-token': 'short' },
+      cookies: { 'csrf-token': 'a-much-longer-token-value' },
+    });
+    const res = createMockResponse();
+    const next = jest.fn();
+
+    expect(() =>
+      csrfProtection.doubleSubmitValidation()(req, asResponse(res), next)
+    ).not.toThrow();
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({ error: 'CSRF validation failed' });
+  });
+
   it('passes when header and cookie tokens match', () => {
     const token = 'c'.repeat(24);
     const req = createMockRequest({

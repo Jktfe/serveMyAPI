@@ -123,6 +123,7 @@ export class AuthService {
     try {
       const decoded = jwt.verify(token, this.secret, {
         issuer: ISSUER,
+        algorithms: ['HS256'],
       }) as jwt.JwtPayload;
 
       // Validate token structure
@@ -155,6 +156,7 @@ export class AuthService {
     try {
       const decoded = jwt.verify(token, this.secret, {
         issuer: ISSUER,
+        algorithms: ['HS256'],
       }) as jwt.JwtPayload;
 
       // Validate token structure
