@@ -42,6 +42,10 @@ export class SecureSessionManager {
       () => this.cleanupExpiredSessions(),
       this.cleanupIntervalMs
     );
+    // Don't let this periodic timer hold the event loop open on its own — the
+    // HTTP server keeps the process alive in production, and tests/CLI can exit
+    // cleanly instead of hanging on a stray interval.
+    this.cleanupInterval.unref();
   }
 
   /**

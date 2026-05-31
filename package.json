@@ -12,7 +12,7 @@
     "start": "node dist/index.js",
     "dev": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
     "lint": "eslint 'src/**/*.ts'",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "cli": "node dist/cli.js"
   },
   "keywords": [
@@ -46,6 +46,7 @@
     "@typescript-eslint/parser": "^8.26.1",
     "eslint": "^9.22.0",
     "jest": "^30.0.4",
-    "nodemon": "^3.1.9"
+    "nodemon": "^3.1.9",
+    "ts-jest": "^29.4.11"
   }
 }

@@ -1,9 +1,22 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { storeApiKeyTool, getApiKeyTool, deleteApiKeyTool, listApiKeysTool } from '../../mcp/tools.js';
-import keychainService from '../../services/keychain.js';
 
-// Mock the keychain service
-jest.mock('../../services/keychain.js');
+/**
+ * The keychain service is the default export of its module. Under native ESM,
+ * `jest.mock(...)` auto-mocking does not produce mock functions, so we register
+ * an explicit mock module and import the tools afterwards via dynamic import.
+ */
+const storeKey = jest.fn<(name: string, key: string) => Promise<void>>();
+const getKey = jest.fn<(name: string) => Promise<string | null>>();
+const deleteKey = jest.fn<(name: string) => Promise<boolean>>();
+const listKeys = jest.fn<() => Promise<string[]>>();
+
+jest.unstable_mockModule('../../services/keychain.js', () => ({
+  default: { storeKey, getKey, deleteKey, listKeys },
+}));
+
+const { storeApiKeyTool, getApiKeyTool, deleteApiKeyTool, listApiKeysTool } = await import(
+  '../../mcp/tools.js'
+);
 
 describe('MCP Tools', () => {
   beforeEach(() => {
@@ -12,19 +25,17 @@ describe('MCP Tools', () => {
 
   describe('storeApiKeyTool', () => {
     it('should store an API key successfully', async () => {
-      const mockStoreKey = keychainService.storeKey as jest.MockedFunction<typeof keychainService.storeKey>;
-      mockStoreKey.mockResolvedValue(undefined);
+      storeKey.mockResolvedValue(undefined);
 
       const result = await storeApiKeyTool.handler({ name: 'test-key', key: 'test-value' });
 
-      expect(mockStoreKey).toHaveBeenCalledWith('test-key', 'test-value');
+      expect(storeKey).toHaveBeenCalledWith('test-key', 'test-value');
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toBe('Successfully stored API key with name: test-key');
     });
 
     it('should handle storage errors', async () => {
-      const mockStoreKey = keychainService.storeKey as jest.MockedFunction<typeof keychainService.storeKey>;
-      mockStoreKey.mockRejectedValue(new Error('Storage failed'));
+      storeKey.mockRejectedValue(new Error('Storage failed'));
 
       const result = await storeApiKeyTool.handler({ name: 'test-key', key: 'test-value' });
 
@@ -35,19 +46,17 @@ describe('MCP Tools', () => {
 
   describe('getApiKeyTool', () => {
     it('should retrieve an API key successfully', async () => {
-      const mockGetKey = keychainService.getKey as jest.MockedFunction<typeof keychainService.getKey>;
-      mockGetKey.mockResolvedValue('test-value');
+      getKey.mockResolvedValue('test-value');
 
       const result = await getApiKeyTool.handler({ name: 'test-key' });
 
-      expect(mockGetKey).toHaveBeenCalledWith('test-key');
+      expect(getKey).toHaveBeenCalledWith('test-key');
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toBe('test-value');
     });
 
     it('should handle key not found', async () => {
-      const mockGetKey = keychainService.getKey as jest.MockedFunction<typeof keychainService.getKey>;
-      mockGetKey.mockResolvedValue(null);
+      getKey.mockResolvedValue(null);
 
       const result = await getApiKeyTool.handler({ name: 'test-key' });
 
@@ -58,19 +67,17 @@ describe('MCP Tools', () => {
 
   describe('deleteApiKeyTool', () => {
     it('should delete an API key successfully', async () => {
-      const mockDeleteKey = keychainService.deleteKey as jest.MockedFunction<typeof keychainService.deleteKey>;
-      mockDeleteKey.mockResolvedValue(true);
+      deleteKey.mockResolvedValue(true);
 
       const result = await deleteApiKeyTool.handler({ name: 'test-key' });
 
-      expect(mockDeleteKey).toHaveBeenCalledWith('test-key');
+      expect(deleteKey).toHaveBeenCalledWith('test-key');
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toBe('Successfully deleted API key with name: test-key');
     });
 
     it('should handle key not found on delete', async () => {
-      const mockDeleteKey = keychainService.deleteKey as jest.MockedFunction<typeof keychainService.deleteKey>;
-      mockDeleteKey.mockResolvedValue(false);
+      deleteKey.mockResolvedValue(false);
 
       const result = await deleteApiKeyTool.handler({ name: 'test-key' });
 
@@ -81,12 +88,11 @@ describe('MCP Tools', () => {
 
   describe('listApiKeysTool', () => {
     it('should list API keys successfully', async () => {
-      const mockListKeys = keychainService.listKeys as jest.MockedFunction<typeof keychainService.listKeys>;
-      mockListKeys.mockResolvedValue(['key1', 'key2', 'key3']);
+      listKeys.mockResolvedValue(['key1', 'key2', 'key3']);
 
       const result = await listApiKeysTool.handler({});
 
-      expect(mockListKeys).toHaveBeenCalled();
+      expect(listKeys).toHaveBeenCalled();
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toContain('Available API keys');
       expect(result.content[0].text).toContain('key1');
@@ -95,8 +101,7 @@ describe('MCP Tools', () => {
     });
 
     it('should handle empty key list', async () => {
-      const mockListKeys = keychainService.listKeys as jest.MockedFunction<typeof keychainService.listKeys>;
-      mockListKeys.mockResolvedValue([]);
+      listKeys.mockResolvedValue([]);
 
       const result = await listApiKeysTool.handler({});
 
