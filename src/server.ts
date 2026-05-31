@@ -24,8 +24,12 @@ const server = createMcpServer();
 // Set up Express app for HTTP transport
 const app = express();
 
-// Trust proxy for accurate IP addresses
-app.set('trust proxy', true);
+// No reverse proxy in front: do NOT trust X-Forwarded-For. With `true`,
+// Express would take the client-forgeable head of the XFF chain as req.ip,
+// letting callers spoof their IP (which feeds session fingerprinting). If a
+// proxy is ever placed in front, set this to the exact hop count or the
+// proxy's CIDR(s) instead — never back to `true`.
+app.set('trust proxy', false);
 
 // Apply global security middleware
 app.use(helmet({
